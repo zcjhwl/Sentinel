@@ -5,12 +5,38 @@ app.controller('MetricCtl', ['$scope', '$stateParams', 'MetricService', '$interv
 
     $scope.endTime = new Date();
     $scope.startTime = new Date();
-    $scope.startTime.setMinutes($scope.endTime.getMinutes() - 30);
+    $scope.startTime.setMinutes($scope.endTime.getMinutes() - 5);
     $scope.startTimeFmt = formatDate($scope.startTime);
     $scope.endTimeFmt = formatDate($scope.endTime);
     function formatDate(date) {
       return moment(date).format('YYYY/MM/DD HH:mm:ss');
     }
+    $scope.changeHour = function (hour) {
+      tmp = new Date();
+      if (hour <= 0 || hour > 12) {
+        hour = 1;
+      }
+      $scope.startTime = new Date(tmp.getTime() - hour * 60 * 60 * 1000);
+      $scope.startTimeFmt = formatDate($scope.startTime);
+
+      $scope.endTime = new Date();
+      $scope.endTimeFmt = formatDate($scope.endTime);
+
+      reInitIdentityDatas();
+    };
+    $scope.changeMin = function (min) {
+      tmp = new Date();
+      if (min <= 0 ) {
+        min = 1;
+      }
+      $scope.startTime = new Date(tmp.getTime() - min * 60 * 1000);
+      $scope.startTimeFmt = formatDate($scope.startTime);
+
+      $scope.endTime = new Date();
+      $scope.endTimeFmt = formatDate($scope.endTime);
+      reInitIdentityDatas();
+    };
+
     $scope.changeStartTime = function (startTime) {
       $scope.startTime = new Date(startTime);
       $scope.startTimeFmt = formatDate(startTime);
@@ -22,7 +48,7 @@ app.controller('MetricCtl', ['$scope', '$stateParams', 'MetricService', '$interv
 
     $scope.app = $stateParams.app;
     // 数据自动刷新频率
-    var DATA_REFRESH_INTERVAL = 1000 * 10;
+    var DATA_REFRESH_INTERVAL = 1000 * 15;
 
     $scope.servicePageConfig = {
       pageSize: 6,
@@ -41,6 +67,8 @@ app.controller('MetricCtl', ['$scope', '$stateParams', 'MetricService', '$interv
     $scope.searchService = function () {
       $timeout.cancel(searchT);
       searchT = $timeout(function () {
+        $scope.endTime = new Date();
+        $scope.endTimeFmt = formatDate($scope.endTime);
         reInitIdentityDatas();
       }, 600);
     }
@@ -50,9 +78,9 @@ app.controller('MetricCtl', ['$scope', '$stateParams', 'MetricService', '$interv
     function reInitIdentityDatas() {
       $interval.cancel(intervalId);
       queryIdentityDatas();
-      intervalId = $interval(function () {
-        queryIdentityDatas();
-      }, DATA_REFRESH_INTERVAL);
+      // intervalId = $interval(function () {
+      //   queryIdentityDatas();
+      // }, DATA_REFRESH_INTERVAL);
     };
 
     $scope.$on('$destroy', function () {
@@ -176,7 +204,9 @@ app.controller('MetricCtl', ['$scope', '$stateParams', 'MetricService', '$interv
         pageIndex: $scope.servicePageConfig.currentPageIndex,
         pageSize: $scope.servicePageConfig.pageSize,
         desc: $scope.isDescOrder,
-        searchKey: $scope.serviceQuery
+        searchKey: $scope.serviceQuery,
+        endTime: $scope.endTime.getTime(),
+        startTime: $scope.startTime.getTime()
       };
       MetricService.queryAppSortedIdentities(params).success(function (data) {
         $scope.metrics = [];
@@ -225,13 +255,13 @@ app.controller('MetricCtl', ['$scope', '$stateParams', 'MetricService', '$interv
         if (curTime > lastTime + 1) {
           for (var j = lastTime + 1; j < curTime; j++) {
             filledData.push({
-                "timestamp": j * 1000,
-                "passQps": 0,
-                "blockQps": 0,
-                "successQps": 0,
-                "exception": 0,
-                "rt": 0,
-                "count": 0
+              "timestamp": j * 1000,
+              "passQps": 0,
+              "blockQps": 0,
+              "successQps": 0,
+              "exception": 0,
+              "rt": 0,
+              "count": 0
             })
           }
         }

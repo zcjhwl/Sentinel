@@ -27,8 +27,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ApolloConfig {
 
-    @Value("${apollo.meta}")
-    private String apolloMeta;
+    @Value("${apollo.portal}")
+    private String apolloPortal;
 
     @Value("${apollo.token}")
     private String apolloToken;
@@ -36,16 +36,9 @@ public class ApolloConfig {
     @Bean
     public ApolloOpenApiClient apolloOpenApiClient() {
         ApolloOpenApiClient client = ApolloOpenApiClient.newBuilder()
-            .withPortalUrl(apolloMeta)
+            .withPortalUrl(apolloPortal)
             .withToken(apolloToken)
             .build();
         return client;
     }
-
-//    -Dspring.profiles.active=local
-//    -Dapollo.meta=http://192.168.2.100:8088
-//    -Dapollo.token=9dcdf0cde15dd4d84dd03fb3e285387802506521
-//    -Dapollo.namespace.name=sentinel
-//    -Dapollo.cluster.name=default
-//    -Dapollo.account=zcj
 }
