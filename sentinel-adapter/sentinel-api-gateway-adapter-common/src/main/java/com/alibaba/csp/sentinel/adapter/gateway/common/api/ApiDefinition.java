@@ -15,6 +15,9 @@
  */
 package com.alibaba.csp.sentinel.adapter.gateway.common.api;
 
+import com.alibaba.csp.sentinel.context.Context;
+import com.alibaba.csp.sentinel.node.DefaultNode;
+import com.alibaba.csp.sentinel.slots.block.Rule;
 import java.util.Objects;
 import java.util.Set;
 
@@ -24,7 +27,7 @@ import java.util.Set;
  * @author Eric Zhao
  * @since 1.6.0
  */
-public class ApiDefinition {
+public class ApiDefinition implements Rule {
 
     private String apiName;
     private Set<ApiPredicateItem> predicateItems;
@@ -77,5 +80,10 @@ public class ApiDefinition {
             "apiName='" + apiName + '\'' +
             ", predicateItems=" + predicateItems +
             '}';
+    }
+
+    @Override
+    public boolean passCheck(Context context, DefaultNode node, int count, Object... args) {
+        return false;
     }
 }

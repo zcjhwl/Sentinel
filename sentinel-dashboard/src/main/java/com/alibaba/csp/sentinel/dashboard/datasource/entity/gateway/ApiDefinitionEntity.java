@@ -18,13 +18,18 @@ package com.alibaba.csp.sentinel.dashboard.datasource.entity.gateway;
 import com.alibaba.csp.sentinel.adapter.gateway.common.api.ApiDefinition;
 import com.alibaba.csp.sentinel.adapter.gateway.common.api.ApiPathPredicateItem;
 import com.alibaba.csp.sentinel.adapter.gateway.common.api.ApiPredicateItem;
+import com.alibaba.csp.sentinel.adapter.gateway.common.rule.GatewayFlowRule;
 import com.alibaba.csp.sentinel.dashboard.datasource.entity.rule.RuleEntity;
 import com.alibaba.csp.sentinel.slots.block.Rule;
 
+import com.alibaba.fastjson.JSONObject;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Entity for {@link ApiDefinition}.
@@ -168,8 +173,15 @@ public class ApiDefinitionEntity implements RuleEntity {
     }
 
     @Override
-    public Rule toRule() {
-        return null;
+    public ApiDefinition toRule() {
+        ApiDefinition apiDefinition = JSONObject
+                .parseObject(JSONObject.toJSONString(this), ApiDefinition.class);
+        List<ApiPathPredicateItem> collect = predicateItems.stream()
+                .map(rule -> JSONObject
+                        .parseObject(JSONObject.toJSONString(rule), ApiPathPredicateItem.class))
+                .collect(Collectors.toList());
+        apiDefinition.setPredicateItems(new HashSet<>(collect));
+        return apiDefinition;
     }
 
     @Override

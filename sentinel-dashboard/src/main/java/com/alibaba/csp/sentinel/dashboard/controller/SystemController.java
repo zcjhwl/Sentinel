@@ -15,9 +15,14 @@
  */
 package com.alibaba.csp.sentinel.dashboard.controller;
 
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRuleProvider;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRulePublisher;
+import com.alibaba.csp.sentinel.dashboard.rule.RuleTypeEnum;
+import com.alibaba.csp.sentinel.slots.system.SystemRule;
 import java.util.Date;
 import java.util.List;
 
+import java.util.stream.Collectors;
 import javax.servlet.http.HttpServletRequest;
 
 import com.alibaba.csp.sentinel.dashboard.auth.AuthService;
@@ -34,6 +39,8 @@ import com.alibaba.csp.sentinel.dashboard.domain.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,6 +53,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class SystemController {
 
     private final Logger logger = LoggerFactory.getLogger(SystemController.class);
+    @Autowired
+    @Qualifier("ruleApolloProvider")
+    private DynamicRuleProvider<List<SystemRule>> ruleProvider;
+    @Autowired
+    @Qualifier("ruleApolloPublisher")
+    private DynamicRulePublisher<List<SystemRuleEntity>> rulePublisher;
+
+    @Value("${rule.datasource.env:apollo}")
+    private String ruleDatasourceEnv;
 
     @Autowired
     private RuleRepository<SystemRuleEntity, Long> repository;
@@ -81,9 +97,23 @@ public class SystemController {
             return checkResult;
         }
         try {
-            List<SystemRuleEntity> rules = sentinelApiClient.fetchSystemRuleOfMachine(app, ip, port);
-            rules = repository.saveAll(rules);
-            return Result.ofSuccess(rules);
+            if (ruleDatasourceEnv.equals("apollo")) {
+                List<SystemRuleEntity> rules;
+                List<SystemRule> tmpRules = ruleProvider.getRules(app, RuleTypeEnum.SYSTEM);
+                if (tmpRules != null) {
+                    rules =  tmpRules.stream().map(rule -> SystemRuleEntity.fromSystemRule(app, ip, port, rule)).collect(Collectors
+                            .toList());
+                } else {
+                    return null;
+                }
+                rules = repository.saveAll(rules);
+                return Result.ofSuccess(rules);
+            } else {
+                List<SystemRuleEntity> rules = sentinelApiClient
+                        .fetchSystemRuleOfMachine(app, ip, port);
+                rules = repository.saveAll(rules);
+                return Result.ofSuccess(rules);
+            }
         } catch (Throwable throwable) {
             logger.error("Query machine system rules error", throwable);
             return Result.ofThrowable(-1, throwable);
@@ -254,7 +284,13 @@ public class SystemController {
     }
 
     private boolean publishRules(String app, String ip, Integer port) {
-        List<SystemRuleEntity> rules = repository.findAllByMachine(MachineInfo.of(app, ip, port));
-        return sentinelApiClient.setSystemRuleOfMachine(app, ip, port, rules);
+        if (ruleDatasourceEnv.equals("apollo")) {
+            rulePublisher.publish(app, repository.findAllByApp(app), RuleTypeEnum.SYSTEM);
+            return true;
+        } else {
+            List<SystemRuleEntity> rules = repository
+                    .findAllByMachine(MachineInfo.of(app, ip, port));
+            return sentinelApiClient.setSystemRuleOfMachine(app, ip, port, rules);
+        }
     }
 }

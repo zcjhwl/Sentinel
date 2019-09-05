@@ -26,7 +26,7 @@ public interface DynamicRulePublisher<T> {
      *
      * @param app app name
      * @param rules list of rules to push
-     * @throws Exception if some error occurs
+     * @param ruleTypeEnum .
      */
-    void publish(String app, T rules) throws Exception;
+    void publish(String app, T rules, RuleTypeEnum ruleTypeEnum);
 }

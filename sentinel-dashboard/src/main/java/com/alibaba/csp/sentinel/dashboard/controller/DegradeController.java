@@ -15,6 +15,9 @@
  */
 package com.alibaba.csp.sentinel.dashboard.controller;
 
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRuleProvider;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRulePublisher;
+import com.alibaba.csp.sentinel.dashboard.rule.RuleTypeEnum;
 import java.util.Date;
 import java.util.List;
 
@@ -35,6 +38,8 @@ import com.alibaba.csp.sentinel.dashboard.repository.rule.InMemDegradeRuleStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,6 +53,16 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class DegradeController {
 
     private final Logger logger = LoggerFactory.getLogger(DegradeController.class);
+
+    @Autowired
+    @Qualifier("ruleApolloProvider")
+    private DynamicRuleProvider<List<DegradeRuleEntity>> ruleProvider;
+    @Autowired
+    @Qualifier("ruleApolloPublisher")
+    private DynamicRulePublisher<List<DegradeRuleEntity>> rulePublisher;
+
+    @Value("${rule.datasource.env:apollo}")
+    private String ruleDatasourceEnv;
 
     @Autowired
     private InMemDegradeRuleStore repository;
@@ -73,9 +88,20 @@ public class DegradeController {
             return Result.ofFail(-1, "port can't be null");
         }
         try {
-            List<DegradeRuleEntity> rules = sentinelApiClient.fetchDegradeRuleOfMachine(app, ip, port);
-            rules = repository.saveAll(rules);
-            return Result.ofSuccess(rules);
+            if (ruleDatasourceEnv.equals("apollo")) {
+                List<DegradeRuleEntity> rules = ruleProvider.getRules(app, RuleTypeEnum.DEGRADE);
+                if (rules != null && !rules.isEmpty()) {
+                    for (DegradeRuleEntity entity : rules) {
+                        entity.setApp(app);
+                    }
+                }
+                rules = repository.saveAll(rules);
+                return Result.ofSuccess(rules);
+            } else {
+                List<DegradeRuleEntity> rules = sentinelApiClient.fetchDegradeRuleOfMachine(app, ip, port);
+                rules = repository.saveAll(rules);
+                return Result.ofSuccess(rules);
+            }
         } catch (Throwable throwable) {
             logger.error("queryApps error:", throwable);
             return Result.ofThrowable(-1, throwable);
@@ -219,7 +245,12 @@ public class DegradeController {
     }
 
     private boolean publishRules(String app, String ip, Integer port) {
-        List<DegradeRuleEntity> rules = repository.findAllByMachine(MachineInfo.of(app, ip, port));
-        return sentinelApiClient.setDegradeRuleOfMachine(app, ip, port, rules);
+        if (ruleDatasourceEnv.equals("apollo")) {
+            rulePublisher.publish(app, repository.findAllByApp(app), RuleTypeEnum.DEGRADE);
+            return true;
+        } else {
+            List<DegradeRuleEntity> rules = repository.findAllByMachine(MachineInfo.of(app, ip, port));
+            return sentinelApiClient.setDegradeRuleOfMachine(app, ip, port, rules);
+        }
     }
 }

@@ -16,6 +16,7 @@
 package com.alibaba.csp.sentinel.dashboard.controller.gateway;
 
 
+import com.alibaba.csp.sentinel.adapter.gateway.common.rule.GatewayFlowRule;
 import com.alibaba.csp.sentinel.dashboard.auth.AuthService;
 import com.alibaba.csp.sentinel.dashboard.client.SentinelApiClient;
 import com.alibaba.csp.sentinel.dashboard.datasource.entity.gateway.GatewayFlowRuleEntity;
@@ -26,10 +27,16 @@ import com.alibaba.csp.sentinel.dashboard.domain.vo.gateway.rule.AddFlowRuleReqV
 import com.alibaba.csp.sentinel.dashboard.domain.vo.gateway.rule.GatewayParamFlowItemVo;
 import com.alibaba.csp.sentinel.dashboard.domain.vo.gateway.rule.UpdateFlowRuleReqVo;
 import com.alibaba.csp.sentinel.dashboard.repository.gateway.InMemGatewayFlowRuleStore;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRuleProvider;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRulePublisher;
+import com.alibaba.csp.sentinel.dashboard.rule.RuleTypeEnum;
 import com.alibaba.csp.sentinel.util.StringUtil;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
@@ -52,6 +59,16 @@ import static com.alibaba.csp.sentinel.dashboard.datasource.entity.gateway.Gatew
 public class GatewayFlowRuleController {
 
     private final Logger logger = LoggerFactory.getLogger(GatewayFlowRuleController.class);
+
+    @Autowired
+    @Qualifier("ruleApolloProvider")
+    private DynamicRuleProvider<List<GatewayFlowRule>> ruleProvider;
+    @Autowired
+    @Qualifier("ruleApolloPublisher")
+    private DynamicRulePublisher<List<GatewayFlowRuleEntity>> rulePublisher;
+
+    @Value("${rule.datasource.env:apollo}")
+    private String ruleDatasourceEnv;
 
     @Autowired
     private InMemGatewayFlowRuleStore repository;
@@ -78,9 +95,20 @@ public class GatewayFlowRuleController {
         }
 
         try {
-            List<GatewayFlowRuleEntity> rules = sentinelApiClient.fetchGatewayFlowRules(app, ip, port).get();
-            repository.saveAll(rules);
-            return Result.ofSuccess(rules);
+            if (ruleDatasourceEnv.equals("apollo")) {
+                List<GatewayFlowRule> tmpRules = ruleProvider.getRules(app, RuleTypeEnum.GW_FLOW);
+                List<GatewayFlowRuleEntity> rules = tmpRules.stream()
+                        .map(rule -> GatewayFlowRuleEntity.fromGatewayFlowRule(app, ip, port, rule))
+                        .collect(Collectors
+                        .toList());
+                repository.saveAll(rules);
+                return Result.ofSuccess(rules);
+            } else {
+                List<GatewayFlowRuleEntity> rules = sentinelApiClient
+                        .fetchGatewayFlowRules(app, ip, port).get();
+                repository.saveAll(rules);
+                return Result.ofSuccess(rules);
+            }
         } catch (Throwable throwable) {
             logger.error("query gateway flow rules error:", throwable);
             return Result.ofThrowable(-1, throwable);
@@ -437,7 +465,13 @@ public class GatewayFlowRuleController {
     }
 
     private boolean publishRules(String app, String ip, Integer port) {
-        List<GatewayFlowRuleEntity> rules = repository.findAllByMachine(MachineInfo.of(app, ip, port));
-        return sentinelApiClient.modifyGatewayFlowRules(app, ip, port, rules);
+        if (ruleDatasourceEnv.equals("apollo")) {
+            rulePublisher.publish(app, repository.findAllByApp(app), RuleTypeEnum.GW_FLOW);
+            return true;
+        } else {
+            List<GatewayFlowRuleEntity> rules = repository
+                    .findAllByMachine(MachineInfo.of(app, ip, port));
+            return sentinelApiClient.modifyGatewayFlowRules(app, ip, port, rules);
+        }
     }
 }

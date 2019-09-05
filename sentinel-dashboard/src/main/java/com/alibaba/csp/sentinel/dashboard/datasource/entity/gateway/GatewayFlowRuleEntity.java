@@ -20,6 +20,7 @@ import com.alibaba.csp.sentinel.adapter.gateway.common.rule.GatewayParamFlowItem
 import com.alibaba.csp.sentinel.dashboard.datasource.entity.rule.RuleEntity;
 import com.alibaba.csp.sentinel.slots.block.Rule;
 
+import com.alibaba.fastjson.JSONObject;
 import java.util.Date;
 import java.util.Objects;
 
@@ -210,8 +211,8 @@ public class GatewayFlowRuleEntity implements RuleEntity {
     }
 
     @Override
-    public Rule toRule() {
-        return null;
+    public GatewayFlowRule toRule() {
+        return JSONObject.parseObject(JSONObject.toJSONString(this), GatewayFlowRule.class);
     }
 
     public Date getGmtModified() {

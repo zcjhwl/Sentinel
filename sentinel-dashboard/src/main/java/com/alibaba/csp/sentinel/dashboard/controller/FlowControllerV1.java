@@ -15,6 +15,10 @@
  */
 package com.alibaba.csp.sentinel.dashboard.controller;
 
+import com.alibaba.csp.sentinel.dashboard.datasource.entity.rule.DegradeRuleEntity;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRuleProvider;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRulePublisher;
+import com.alibaba.csp.sentinel.dashboard.rule.RuleTypeEnum;
 import java.util.Date;
 import java.util.List;
 
@@ -34,6 +38,8 @@ import com.alibaba.csp.sentinel.dashboard.repository.rule.InMemoryRuleRepository
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -54,6 +60,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class FlowControllerV1 {
 
     private final Logger logger = LoggerFactory.getLogger(FlowControllerV1.class);
+
+    @Autowired
+    @Qualifier("ruleApolloProvider")
+    private DynamicRuleProvider<List<FlowRuleEntity>> ruleProvider;
+    @Autowired
+    @Qualifier("ruleApolloPublisher")
+    private DynamicRulePublisher<List<FlowRuleEntity>> rulePublisher;
+
+    @Value("${rule.datasource.env:apollo}")
+    private String ruleDatasourceEnv;
 
     @Autowired
     private InMemoryRuleRepositoryAdapter<FlowRuleEntity> repository;
@@ -81,9 +97,23 @@ public class FlowControllerV1 {
             return Result.ofFail(-1, "port can't be null");
         }
         try {
-            List<FlowRuleEntity> rules = sentinelApiClient.fetchFlowRuleOfMachine(app, ip, port);
-            rules = repository.saveAll(rules);
-            return Result.ofSuccess(rules);
+            if (ruleDatasourceEnv.equals("apollo")) {
+                List<FlowRuleEntity> rules = ruleProvider.getRules(app, RuleTypeEnum.FLOW);
+                if (rules != null && !rules.isEmpty()) {
+                    for (FlowRuleEntity entity : rules) {
+                        entity.setApp(app);
+                        if (entity.getClusterConfig() != null && entity.getClusterConfig().getFlowId() != null) {
+                            entity.setId(entity.getClusterConfig().getFlowId());
+                        }
+                    }
+                }
+                rules = repository.saveAll(rules);
+                return Result.ofSuccess(rules);
+            } else {
+                List<FlowRuleEntity> rules = sentinelApiClient.fetchFlowRuleOfMachine(app, ip, port);
+                rules = repository.saveAll(rules);
+                return Result.ofSuccess(rules);
+            }
         } catch (Throwable throwable) {
             logger.error("Error when querying flow rules", throwable);
             return Result.ofThrowable(-1, throwable);
@@ -268,7 +298,12 @@ public class FlowControllerV1 {
     }
 
     private boolean publishRules(String app, String ip, Integer port) {
-        List<FlowRuleEntity> rules = repository.findAllByMachine(MachineInfo.of(app, ip, port));
-        return sentinelApiClient.setFlowRuleOfMachine(app, ip, port, rules);
+        if (ruleDatasourceEnv.equals("apollo")) {
+            rulePublisher.publish(app, repository.findAllByApp(app), RuleTypeEnum.FLOW);
+            return true;
+        } else {
+            List<FlowRuleEntity> rules = repository.findAllByMachine(MachineInfo.of(app, ip, port));
+            return sentinelApiClient.setFlowRuleOfMachine(app, ip, port, rules);
+        }
     }
 }
