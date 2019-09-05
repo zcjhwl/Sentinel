@@ -211,8 +211,10 @@ public class GatewayFlowRuleEntity implements RuleEntity {
     }
 
     @Override
-    public GatewayFlowRule toRule() {
-        return JSONObject.parseObject(JSONObject.toJSONString(this), GatewayFlowRule.class);
+    public Rule toRule() {
+        GatewayFlowRule gatewayFlowRule = JSONObject
+                .parseObject(JSONObject.toJSONString(this), GatewayFlowRule.class);
+        return (Rule)gatewayFlowRule;
     }
 
     public Date getGmtModified() {

@@ -173,7 +173,7 @@ public class ApiDefinitionEntity implements RuleEntity {
     }
 
     @Override
-    public ApiDefinition toRule() {
+    public Rule toRule() {
         ApiDefinition apiDefinition = JSONObject
                 .parseObject(JSONObject.toJSONString(this), ApiDefinition.class);
         List<ApiPathPredicateItem> collect = predicateItems.stream()
@@ -181,7 +181,7 @@ public class ApiDefinitionEntity implements RuleEntity {
                         .parseObject(JSONObject.toJSONString(rule), ApiPathPredicateItem.class))
                 .collect(Collectors.toList());
         apiDefinition.setPredicateItems(new HashSet<>(collect));
-        return apiDefinition;
+        return (Rule)apiDefinition;
     }
 
     @Override
